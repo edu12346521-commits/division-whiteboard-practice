@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eraser, Lightbulb, Medal, PenLine, RotateCw, Sparkles, Trophy } from "lucide-react";
+import { getLeaderboard, submitAnswer } from "../lib/leaderboard-client";
 
 type ClassName = "4A" | "4B" | "4C";
 type Step = { partial: number; quotientDigit: number; product: number; remainder: number };
@@ -76,10 +77,7 @@ export default function Home() {
   const fetchRankings = useCallback(async (currentPlayer?: Player | null) => {
     const requestNumber = ++scoreRequestRef.current;
     try {
-      const query = currentPlayer ? `?class=${currentPlayer.className}&student=${currentPlayer.studentNo}` : "";
-      const response = await fetch(`/api/leaderboard${query}`, { cache: "no-store" });
-      if (!response.ok) throw new Error("leaderboard");
-      const data = (await response.json()) as { rankings: Rank[]; ownCompleted?: number };
+      const data = await getLeaderboard(currentPlayer);
       if (requestNumber !== scoreRequestRef.current) return;
       setRankings(data.rankings);
       setScoresUnavailable(false);
@@ -124,9 +122,7 @@ export default function Home() {
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true },
       async execute() {
-        const response = await fetch("/api/leaderboard", { cache: "no-store" });
-        if (!response.ok) throw new Error("排行榜暫時未能載入");
-        return response.json();
+        return getLeaderboard();
       },
     });
     register({
@@ -240,20 +236,14 @@ export default function Home() {
     }
     setChecking(true);
     try {
-      const response = await fetch("/api/leaderboard", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+      const data = await submitAnswer({
           ...player,
           dividend: problem.dividend,
           divisor: problem.divisor,
           attemptId: problem.attemptId,
           quotient: Number(answer.quotient),
           remainder: Number(answer.remainder),
-        }),
       });
-      const data = await response.json() as { error?: string; completed?: number };
-      if (!response.ok) throw new Error(data.error || "現在未能儲存分數，請稍後再試。");
       const quotient = Math.floor(problem.dividend / problem.divisor);
       const completedCount = typeof data.completed === "number" ? data.completed : completed + 1;
       const levelPassed = completedCount > 0 && completedCount % 5 === 0;
@@ -292,7 +282,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#f3f6fb] text-[#17243c]">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="除法小白板首頁"><span className="brand-mark"><span>÷</span></span><span>除法小白板</span></a>
+        <a className="brand" href={import.meta.env.BASE_URL} aria-label="除法小白板首頁"><span className="brand-mark"><span>÷</span></span><span>除法小白板</span></a>
         <div className="topbar-right">
           {player && <span className="student-chip"><span className="student-dot" />{player.className} · {player.studentNo} 號</span>}
           <span className="grade-chip">四年級數學</span>
@@ -323,7 +313,7 @@ export default function Home() {
             <div className="preview-rule" />
             <div className="preview-lines"><span className="preview-board-note">拿起筆，在白板上完成你的豎式。</span><span className="preview-blue">每答對 5 題，就能解鎖新關卡！</span></div>
             <div className="preview-note"><Lightbulb size={15} /> 需要幫忙時，再按「提示」</div>
-            <img className="preview-mascot" src="/pencil-buddy.webp" alt="" aria-hidden="true" />
+            <img className="preview-mascot" src={`${import.meta.env.BASE_URL}pencil-buddy.webp`} alt="" aria-hidden="true" />
           </div>
         </section>
       ) : (
@@ -373,7 +363,7 @@ export default function Home() {
           </section>
 
           <aside className="leaderboard-card" aria-label="四年級排行榜">
-            <div className="mascot-banner"><img src="/pencil-buddy.webp" alt="" aria-hidden="true" /><div><strong>一起闖關吧！</strong><span>寫好豎式，拿下星星 ✨</span></div></div>
+            <div className="mascot-banner"><img src={`${import.meta.env.BASE_URL}pencil-buddy.webp`} alt="" aria-hidden="true" /><div><strong>一起闖關吧！</strong><span>寫好豎式，拿下星星 ✨</span></div></div>
             <div className="leaderboard-head"><div className="leaderboard-icon"><Trophy size={19} /></div><div><div className="eyebrow">一起努力</div><h2>全級排行榜</h2></div><span className="rank-count">{rankings.length} 人</span></div>
             <p className="leaderboard-sub">按完成題數排列</p>
             {myRank && <div className="my-rank"><div><span className="my-rank-label">你的排名</span><strong>第 {myRank} 名</strong></div><span className="my-rank-score">{completed} 題</span></div>}
